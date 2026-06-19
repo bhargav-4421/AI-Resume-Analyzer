@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Resume Analyzer</title>
+    <link rel="icon" type="image/png" href="/static/imgs/icon.png">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- Theme Toggle Button -->
+    <button id="themeToggle" class="theme-toggle">🌙</button>
+    
+    <!-- Scroll to Top Button -->
+    <button id="scrollTopBtn" class="scroll-top">↑</button>
+
+    <!-- Header Section -->
+    <header class="header">
+        <div class="header-content">
+            <h1>AI Resume Analyzer</h1>
+            <p>AI-Powered Career Matching - Upload your resume and compare it with job descriptions</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Upload Section -->
+        <section class="upload-section">
+            <div class="section-card">
+                <h2>📤 Upload Your Resume</h2>
+                <form id="analysisForm" method="POST" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="resume">Resume File (PDF or DOCX)</label>
+                        <div class="file-upload">
+                            <input type="file" id="resume" name="resume" accept=".pdf,.docx" required>
+                            <label for="resume" class="file-upload-label" id="fileLabel">
+                                <span class="file-icon">📄</span>
+                                <span class="file-text">Choose file or drag and drop</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="jobDescription">Job Description</label>
+                        <textarea 
+                            id="jobDescription" 
+                            name="job_description" 
+                            placeholder="Paste the job description here to analyze how well your resume matches..."
+                            required
+                        ></textarea>
+                    </div>
+
+                    <button type="submit" class="submit-btn" id="analyzeBtn">
+                        <span class="btn-text">Analyze Resume</span>
+                        <span class="btn-icon">🔍</span>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Loading Section -->
+        <section class="loading-section" id="loading" style="display: none;">
+            <div class="loading-card">
+                <div class="spinner"></div>
+                <p>Analyzing your resume...</p>
+                <p class="loading-subtitle">This may take a few seconds</p>
+            </div>
+        </section>
+
+        <!-- Error Section -->
+        <section class="error-section" id="errorMessage"></section>
+
+        <!-- Results Dashboard -->
+        <section class="results-dashboard" id="results">
+            <!-- Score Card -->
+            <div class="dashboard-card score-card">
+                <div class="card-header">
+                    <h2>📊 Match Score</h2>
+                </div>
+                <div class="card-content">
+                    <div class="score-display" id="scoreDisplay">0%</div>
+                    <div class="score-description" id="scoreDescription">
+                        Analyzing your match...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Skills Grid -->
+            <div class="skills-grid">
+                <!-- Detected Skills Card -->
+                <div class="dashboard-card skills-card">
+                    <div class="card-header">
+                        <h2>✅ Detected Skills</h2>
+                        <span class="skill-count" id="detectedCount">0</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="skills-list" id="detectedSkills">
+                            <div class="empty-state">No skills detected</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Missing Skills Card -->
+                <div class="dashboard-card skills-card missing-skills-card">
+                    <div class="card-header">
+                        <h2>❌ Missing Skills</h2>
+                        <span class="skill-count" id="missingCount">0</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="skills-list" id="missingSkills">
+                            <div class="empty-state">No missing skills detected</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommendations Card -->
+            <div class="dashboard-card recommendations-card" id="recommendationsSection" style="display: none;">
+                <div class="card-header">
+                    <h2>💡 Recommendations</h2>
+                </div>
+                <div class="card-content">
+                    <div class="recommendations" id="recommendations">
+                        <!-- Recommendations will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2024 Resume Analyzer. Built with AI for better career matching.</p>
+    </footer>
+
+    <script>
+        // Theme Toggle
+        const themeToggle = document.getElementById('themeToggle');
+        const body = document.body;
+        
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        body.setAttribute('data-theme', savedTheme);
+        themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = body.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            body.setAttribute('data-theme', newTheme);
+            themeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+            localStorage.setItem('theme', newTheme);
+        });
+
+        // Scroll to Top
+        const scrollTopBtn = document.getElementById('scrollTopBtn');
+        
+        window.addEventListener('scroll', () => {
+            if (window.pageYOffset > 200) {
+                scrollTopBtn.style.display = 'block';
+            } else {
+                scrollTopBtn.style.display = 'none';
+            }
+        });
+        
+        scrollTopBtn.addEventListener('click', () => {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        });
+
+        const form = document.getElementById('analysisForm');
+        const fileInput = document.getElementById('resume');
+        const fileLabel = document.getElementById('fileLabel');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        const errorMessage = document.getElementById('errorMessage');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+
+        // Handle file selection
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                fileLabel.querySelector('.file-text').textContent = file.name;
+                fileLabel.classList.add('has-file');
+            } else {
+                fileLabel.querySelector('.file-text').textContent = 'Choose file or drag and drop';
+                fileLabel.classList.remove('has-file');
+            }
+        });
+
+        // Handle form submission
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Hide previous results and errors
+            results.classList.remove('show');
+            errorMessage.classList.remove('show');
+            
+            // Show loading
+            loading.style.display = 'block';
+            analyzeBtn.disabled = true;
+
+            try {
+                const formData = new FormData(form);
+
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error("Server returned an error");
+                }
+
+                const text = await response.text();
+                let data;
+
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    throw new Error("Invalid JSON response from server");
+                }
+
+                if (data.success) {
+                    displayResults(data);
+                } else {
+                    showError(data.error || 'An error occurred during analysis');
+                }
+
+            } catch (error) {
+                console.error(error);
+                showError('Server connection issue. Please try again.');
+            } finally {
+                loading.style.display = 'none';
+                analyzeBtn.disabled = false;
+            }
+        });
+
+        function displayResults(data) {
+            // Display match score
+            const scoreDisplay = document.getElementById('scoreDisplay');
+            const scoreDescription = document.getElementById('scoreDescription');
+            scoreDisplay.textContent = `${data.match_score}%`;
+            
+            // Set score color and description
+            scoreDisplay.className = 'score-display';
+            if (data.match_score >= 70) {
+                scoreDisplay.classList.add('score-high');
+                scoreDescription.textContent = 'Excellent match! Your resume aligns well with the job requirements.';
+            } else if (data.match_score >= 40) {
+                scoreDisplay.classList.add('score-medium');
+                scoreDescription.textContent = 'Good match with room for improvement. Consider enhancing your skills.';
+            } else {
+                scoreDisplay.classList.add('score-low');
+                scoreDescription.textContent = 'Low match. Significant improvements needed to align with job requirements.';
+            }
+
+            // Display detected skills
+            const detectedSkillsContainer = document.getElementById('detectedSkills');
+            const detectedCount = document.getElementById('detectedCount');
+            detectedSkillsContainer.innerHTML = '';
+            
+            if (data.detected_skills && data.detected_skills.length > 0) {
+                detectedCount.textContent = data.detected_skills.length;
+                data.detected_skills.forEach(skill => {
+                    const skillTag = document.createElement('span');
+                    skillTag.className = 'skill-tag';
+                    skillTag.textContent = skill;
+                    detectedSkillsContainer.appendChild(skillTag);
+                });
+            } else {
+                detectedCount.textContent = '0';
+                detectedSkillsContainer.innerHTML = '<div class="empty-state">No skills detected</div>';
+            }
+
+            // Display missing skills
+            const missingSkillsContainer = document.getElementById('missingSkills');
+            const missingCount = document.getElementById('missingCount');
+            missingSkillsContainer.innerHTML = '';
+            
+            if (data.missing_keywords && data.missing_keywords.length > 0) {
+                missingCount.textContent = data.missing_keywords.length;
+                data.missing_keywords.forEach(skill => {
+                    const skillTag = document.createElement('span');
+                    skillTag.className = 'skill-tag missing-skill';
+                    skillTag.textContent = skill;
+                    missingSkillsContainer.appendChild(skillTag);
+                });
+            } else {
+                missingCount.textContent = '0';
+                missingSkillsContainer.innerHTML = '<div class="empty-state">No missing skills detected</div>';
+            }
+
+            // Display recommendations if available
+            if (data.recommendations && data.recommendations.length > 0) {
+                const recommendationsSection = document.getElementById('recommendationsSection');
+                const recommendationsContainer = document.getElementById('recommendations');
+                
+                recommendationsSection.style.display = 'block';
+                recommendationsContainer.innerHTML = '<ul>' + 
+                    data.recommendations.map(rec => `<li>${rec}</li>`).join('') + 
+                    '</ul>';
+            } else {
+                document.getElementById('recommendationsSection').style.display = 'none';
+            }
+
+            // Show results
+            results.classList.add('show');
+            
+            // Smooth scroll to results
+            setTimeout(() => {
+                results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+            
+            // Smooth scroll to error
+            errorMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // Drag and drop functionality
+        const dropZone = fileLabel;
+
+        dropZone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                const event = new Event('change', { bubbles: true });
+                fileInput.dispatchEvent(event);
+            }
+        });
+    </script>
+</body>
+</html>
